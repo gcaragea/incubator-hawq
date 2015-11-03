@@ -1169,7 +1169,7 @@ static struct config_bool ConfigureNamesBool[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_metadata_versioning,
-		false, &assign_gp_metadata_versioning, NULL
+		true, &assign_gp_metadata_versioning, NULL
 	},
 	{
 		{"force_bitmap_table_scan", PGC_USERSET, DEVELOPER_OPTIONS,
@@ -3524,7 +3524,7 @@ static struct config_bool ConfigureNamesBool[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_release_mdcache,
-		true, &assign_optimizer_release_mdcache, NULL
+		false, &assign_optimizer_release_mdcache, NULL
 	},
 
 	{
@@ -4254,7 +4254,7 @@ static struct config_bool ConfigureNamesBool[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
  		&gp_log_optimization_time,
-		false, NULL, NULL
+		true, NULL, NULL
 	},
 
 	{
