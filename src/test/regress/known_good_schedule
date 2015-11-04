@@ -100,7 +100,7 @@ ignore: leastsquares
 ignore: naivebayes
 ignore: direct_dispatch
 ignore: partition_pruning_with_fn
-test: transactions
+ignore: transactions
 ignore: distributed_transactions
 ignore: random
 ignore: arrays
