@@ -1799,6 +1799,25 @@ get_rel_name_partition(Oid relid)
 	return rel_name;
 }
 
+/*
+ * get_rel_number_partitions
+ *
+ *		Returns the number of leaf partitions for a given root relation.
+ *		Returns 0 if the relation is not a partition table or non-root partition table.
+ */
+int32
+get_rel_number_partitions(Oid relid)
+{
+	if (PART_STATUS_NONE == rel_part_status(relid))
+		return 0;
+
+	if (!rel_is_partitioned(relid))
+		return 0;
+
+	int count = countLeafPartTables(relid);
+
+	return count;
+}
 
 /*
  * get_rel_namespace

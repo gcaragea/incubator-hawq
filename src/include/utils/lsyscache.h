@@ -99,6 +99,7 @@ extern Oid	get_relname_relid(const char *relname, Oid relnamespace);
 extern int get_relnatts(Oid relid);
 extern char *get_rel_name(Oid relid);
 extern char *get_rel_name_partition(Oid relid);
+extern int32 get_rel_number_partitions(Oid relid);
 extern Oid	get_rel_namespace(Oid relid);
 extern Oid	get_rel_type_id(Oid relid);
 extern char get_rel_relkind(Oid relid);

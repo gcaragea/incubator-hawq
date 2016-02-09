@@ -434,6 +434,7 @@ extern bool optimizer_multilevel_partitioning;
 extern bool optimizer_enable_derive_stats_all_groups;
 extern bool optimizer_explain_show_status;
 extern bool optimizer_prefer_scalar_dqa_multistage_agg;
+extern int  optimizer_insert_sort_partition_number;
 
 /**
  * Enable logging of DPE match in optimizer.
@@ -441,13 +442,14 @@ extern bool optimizer_prefer_scalar_dqa_multistage_agg;
 extern bool	optimizer_partition_selection_log;
 
 /*
- * During insertion in a table with parquet partitions,
+ * During insertion in a table with parquet or row-oriented partitions,
  * require tuples to be sorted by partition key.
  *
  * This reduces the amount of memory required during execution by
  * keeping only one partition open at a time.
  */
 extern bool gp_parquet_insert_sort;
+extern bool gp_row_oriented_insert_sort;
 
 #if USE_EMAIL
 extern char  *gp_email_smtp_server;

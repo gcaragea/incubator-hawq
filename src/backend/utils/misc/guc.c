@@ -762,6 +762,7 @@ bool 		optimizer_multilevel_partitioning;
 bool        optimizer_enable_derive_stats_all_groups;
 bool		optimizer_explain_show_status;
 bool		optimizer_prefer_scalar_dqa_multistage_agg;
+int			optimizer_insert_sort_partition_number;
 
 /* Security */
 bool		gp_reject_internal_tcp_conn = true;
@@ -1954,6 +1955,17 @@ static struct config_bool ConfigureNamesBool[] =
 
 		},
 		&gp_parquet_insert_sort,
+		true, NULL, NULL
+	},
+
+	{
+		{"gp_row_oriented_insert_sort", PGC_USERSET, RESOURCES_MEM,
+			gettext_noop("Enable sorting of tuples during insertion in row-oriented partitioned tables."),
+			gettext_noop("Reduces memory usage required for insertion by keeping on part open at a time"),
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_GPDB_ADDOPT
+
+		},
+		&gp_row_oriented_insert_sort,
 		true, NULL, NULL
 	},
 
@@ -6151,6 +6163,16 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_segments,
+		0, 0, INT_MAX, NULL, NULL
+	},
+
+	{
+		{"optimizer_insert_sort_partition_number", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Minimum number of partitions required for sorting tuples during insertion in an append only row-oriented partitioned table"),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_insert_sort_partition_number,
 		0, 0, INT_MAX, NULL, NULL
 	},
 

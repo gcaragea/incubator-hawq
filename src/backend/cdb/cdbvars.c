@@ -248,6 +248,9 @@ bool		gp_enable_alter_table_inherit_cols = false;
 /* During insertion in a table with parquet partitions, require tuples to be sorted by partition key */
 bool		gp_parquet_insert_sort = true;
 
+/* During insertion in a table with row-oriented partitions, require tuples to be sorted by partition key */
+bool		gp_row_oriented_insert_sort = true;
+
 /* The following GUCs is for HAWQ 2.o */
 
 bool optimizer_enforce_hash_dist_policy;

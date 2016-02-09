@@ -219,6 +219,13 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elem[] =
 		},
 
 		{
+		EopttraceDisableSortForDMLOnRowOriented,
+		&gp_row_oriented_insert_sort,
+		true, // m_fNegate
+		GPOS_WSZ_LIT("Disable sorting of table oids below INSERT on Row-oriented tables.")
+		},
+
+		{
 		EopttraceDisableOuterJoin2InnerJoinRewrite,
 		&optimizer_enable_outerjoin_rewrite,
 		true, // m_fNegate

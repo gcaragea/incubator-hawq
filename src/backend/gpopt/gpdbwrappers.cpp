@@ -1215,6 +1215,21 @@ gpdb::OidRootPartition
 	return InvalidOid;
 }
 
+int
+gpdb::INumberPartitions
+	(
+	Oid oid
+	)
+{
+	GP_WRAP_START;
+	{
+		/* catalog tables: pg_partition, pg_partition_rule */
+		return get_rel_number_partitions(oid);
+	}
+	GP_WRAP_END;
+	return 0;
+}
+
 bool
 gpdb::FCastFunc
 	(
