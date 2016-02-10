@@ -6157,7 +6157,7 @@ static struct config_int ConfigureNamesInt[] =
 
 	{
 		{"optimizer_parts_to_force_sort_on_insert", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Minimum number of partitions required for sorting tuples during insertion in an append only row-oriented partitioned table"),
+			gettext_noop("Minimum number of partitions required to force sorting tuples during insertion in an append only row-oriented partitioned table"),
 			NULL,
 			GUC_NOT_IN_SAMPLE
 		},
