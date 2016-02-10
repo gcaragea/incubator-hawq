@@ -1959,17 +1959,6 @@ static struct config_bool ConfigureNamesBool[] =
 	},
 
 	{
-		{"gp_row_oriented_insert_sort", PGC_USERSET, RESOURCES_MEM,
-			gettext_noop("Enable sorting of tuples during insertion in row-oriented partitioned tables."),
-			gettext_noop("Reduces memory usage required for insertion by keeping on part open at a time"),
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_GPDB_ADDOPT
-
-		},
-		&gp_row_oriented_insert_sort,
-		true, NULL, NULL
-	},
-
-	{
 		{"gp_enable_mk_sort", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enable multi-key sort."),
 			gettext_noop("A faster sort."),
@@ -6173,7 +6162,7 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_insert_sort_partition_number,
-		0, 0, INT_MAX, NULL, NULL
+		INT_MAX, 0, INT_MAX, NULL, NULL
 	},
 
 	{

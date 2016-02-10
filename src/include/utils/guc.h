@@ -442,14 +442,13 @@ extern int  optimizer_insert_sort_partition_number;
 extern bool	optimizer_partition_selection_log;
 
 /*
- * During insertion in a table with parquet or row-oriented partitions,
+ * During insertion in a table with parquet partitions,
  * require tuples to be sorted by partition key.
  *
  * This reduces the amount of memory required during execution by
  * keeping only one partition open at a time.
  */
 extern bool gp_parquet_insert_sort;
-extern bool gp_row_oriented_insert_sort;
 
 #if USE_EMAIL
 extern char  *gp_email_smtp_server;
