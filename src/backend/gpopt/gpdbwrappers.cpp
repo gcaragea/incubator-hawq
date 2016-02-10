@@ -102,6 +102,7 @@
 #define ALLOW_get_partition_attrs
 #define ALLOW_rel_is_leaf_partition
 #define ALLOW_rel_partition_get_master
+#define ALLOW_get_rel_number_partitions
 #define ALLOW_BuildLogicalIndexInfo
 #define ALLOW_get_parts
 #define ALLOW_countLeafPartTables
