@@ -655,7 +655,10 @@ CTranslatorRelcacheToDXL::Pmdrel
 		}
 
 		// get number of leaf partitions
-		ulLeafPartitions = gpdb::INumberPartitions(oid);
+		if (gpdb::FRelPartIsRoot(oid))
+		{
+		   ulLeafPartitions = gpdb::UlLeafPartitions(oid);
+		}
 
 		// get key sets
 		BOOL fAddDefaultKeys = FHasSystemColumns(rel->rd_rel->relkind);

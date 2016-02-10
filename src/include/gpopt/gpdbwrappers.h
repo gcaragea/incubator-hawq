@@ -303,9 +303,6 @@ namespace gpdb {
 	// find the oid of the root partition given partition oid belongs to
 	Oid OidRootPartition(Oid oid);
 	
-	// find the number of partitions for a given root relation
-	int INumberPartitions(Oid oid);
-
 	// partition attributes
 	List *PlPartitionAttrs(Oid oid);
 
