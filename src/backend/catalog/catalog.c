@@ -48,7 +48,6 @@
 #include "catalog/gp_master_mirroring.h"
 #include "catalog/gp_persistent.h"
 #include "catalog/gp_global_sequence.h"
-#include "catalog/gp_id.h"
 #include "catalog/gp_version.h"
 #include "catalog/toasting.h"
 #include "catalog/gp_policy.h"
@@ -749,7 +748,6 @@ IsSharedRelation(Oid relationId)
 		relationId == FileSpaceRelationId ||
 		relationId == TableSpaceRelationId ||
 
-		relationId == GpIdRelationId ||
 		relationId == GpVersionRelationId ||
 
 		relationId == GpPersistentRelfileNodeRelationId ||
@@ -775,8 +773,6 @@ relationId == AuthIdRelationId ||
 relationId == GpMasterMirroringRelationId || 
 /* relation id: 5035 - gp_san_configuration 20101104 */
 relationId == GpSanConfigRelationId || 
-/* relation id: 5039 - gp_fault_strategy 20101104 */
-relationId == GpFaultStrategyRelationId || 
 /* relation id: 5000 - gp_configuration 20101104 */
 relationId == GpConfigurationRelationId || 
 /* relation id: 5006 - gp_configuration_history 20101104 */

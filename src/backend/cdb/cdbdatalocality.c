@@ -88,11 +88,11 @@ typedef struct range_table_collector_context {
  * structure containing information about how much a
  * host holds.
  */
-typedef struct HostDataVolumnInfo {
+typedef struct HostDataVolumeInfo {
 	HostnameIndexEntry *hashEntry;
-	int64 datavolumn;
+	int64 datavolume;
 	int occur_count;
-} HostDataVolumnInfo;
+} HostDataVolumeInfo;
 
 /*
  * structure for data distribution statistics.
@@ -100,7 +100,7 @@ typedef struct HostDataVolumnInfo {
 typedef struct data_dist_stat_context {
 	int size;
 	int max_size;
-	HostDataVolumnInfo *volInfos;
+	HostDataVolumeInfo *volInfos;
 } data_dist_stat_context;
 
 /*
@@ -275,10 +275,10 @@ typedef struct Split_Assignment_Result {
 /*
  * structure for host data statistics.
  */
-typedef struct hostname_volumn_stat_context {
+typedef struct hostname_volume_stat_context {
 	int size;
-	HostnameVolumnInfo *hostnameVolInfos;
-} hostname_volumn_stat_context;
+	HostnameVolumeInfo *hostnameVolInfos;
+} hostname_volume_stat_context;
 
 /*
  * structure for tracking the whole procedure
@@ -289,7 +289,7 @@ typedef struct split_to_segment_mapping_context {
 	range_table_collector_context rtc_context;
 	data_dist_stat_context dds_context;
 	collect_hdfs_split_location_context chsl_context;
-	hostname_volumn_stat_context host_context;
+	hostname_volume_stat_context host_context;
 	HTAB *hostname_map;
 	bool keep_hash;
 	int prefer_segment_num;
@@ -369,7 +369,7 @@ static Block_Host_Index * update_data_dist_stat(
 		split_to_segment_mapping_context *context, BlockLocation *locations,
 		int block_num);
 
-static HostDataVolumnInfo *search_host_in_stat_context(
+static HostDataVolumeInfo *search_host_in_stat_context(
 		split_to_segment_mapping_context *context, char *hostname);
 
 static bool IsAggFunction(char* funcName);
@@ -452,8 +452,35 @@ static Relation_File** change_file_order_based_on_continuity(
 		Relation_Data *rel_data, TargetSegmentIDMap* idMap, int host_num,
 		int* fileCount, Relation_Assignment_Context *assignment_context);
 
-static int64 set_maximum_segment_volumn_parameter(Relation_Data *rel_data,
+static int64 set_maximum_segment_volume_parameter(Relation_Data *rel_data,
 		int host_num, double* maxSizePerSegment);
+
+/*
+ * saveQueryResourceParameters: save QueryResourceParameters
+ * in prepare statement along with query plan so that the query
+ * resource can be re-allocated during multiple executions of
+ * the plan
+ */
+void saveQueryResourceParameters(
+		QueryResourceParameters	*resource_parameters,
+		QueryResourceLife       life,
+		int32                   slice_size,
+		int64_t                 iobytes,
+		int                     max_target_segment_num,
+		int                     min_target_segment_num,
+		HostnameVolumeInfo      *vol_info,
+		int                     vol_info_size)
+
+{
+	resource_parameters->life = life;
+	resource_parameters->slice_size = slice_size;
+	resource_parameters->iobytes = iobytes;
+	resource_parameters->max_target_segment_num = max_target_segment_num;
+	resource_parameters->min_target_segment_num = min_target_segment_num;
+	resource_parameters->vol_info = vol_info;
+	resource_parameters->vol_info_size = vol_info_size;
+}
+
 /*
  * Setup /cleanup the memory context for this run
  * of data locality algorithm.
@@ -513,10 +540,10 @@ static void init_datalocality_context(split_to_segment_mapping_context *context)
 		context->dds_context.size = 0;
 		context->dds_context.max_size = 4;
 		MemoryContextSwitchTo(context->datalocality_memorycontext);
-		context->dds_context.volInfos = (HostDataVolumnInfo *) palloc(
-				sizeof(HostDataVolumnInfo) * context->dds_context.max_size);
+		context->dds_context.volInfos = (HostDataVolumeInfo *) palloc(
+				sizeof(HostDataVolumeInfo) * context->dds_context.max_size);
 		MemSet(context->dds_context.volInfos, 0,
-				sizeof(HostDataVolumnInfo) * context->dds_context.max_size);
+				sizeof(HostDataVolumeInfo) * context->dds_context.max_size);
 		MemoryContextSwitchTo(context->old_memorycontext);
 	}
 
@@ -912,7 +939,7 @@ int64 get_block_locations_and_claculte_table_size(split_to_segment_mapping_conte
  * search_host_in_stat_context: search a host name in the statistic
  * context; if not found, create a new one.
  */
-static HostDataVolumnInfo *
+static HostDataVolumeInfo *
 search_host_in_stat_context(split_to_segment_mapping_context *context,
 		char *hostname) {
 	HostnameIndexKey key;
@@ -929,16 +956,16 @@ search_host_in_stat_context(split_to_segment_mapping_context *context,
 		if (context->dds_context.size >= context->dds_context.max_size) {
 			int offset = context->dds_context.max_size;
 			context->dds_context.max_size <<= 1;
-			context->dds_context.volInfos = (HostDataVolumnInfo *) repalloc(
+			context->dds_context.volInfos = (HostDataVolumeInfo *) repalloc(
 					context->dds_context.volInfos,
-					sizeof(HostDataVolumnInfo) * context->dds_context.max_size);
+					sizeof(HostDataVolumeInfo) * context->dds_context.max_size);
 			MemSet(context->dds_context.volInfos + offset, 0,
-					sizeof(HostDataVolumnInfo)
+					sizeof(HostDataVolumeInfo)
 							* (context->dds_context.max_size - offset));
 		}
 		entry->index = context->dds_context.size++;
 		context->dds_context.volInfos[entry->index].hashEntry = entry;
-		context->dds_context.volInfos[entry->index].datavolumn = 0;
+		context->dds_context.volInfos[entry->index].datavolume = 0;
 		context->dds_context.volInfos[entry->index].occur_count = 0;
 	}
 
@@ -1029,8 +1056,8 @@ update_data_dist_stat(split_to_segment_mapping_context *context,
 
 		for (j = 0; j < locations[i].numOfNodes; j++) {
 			char *hostname = pstrdup(locations[i].hosts[j]); /* locations[i].hosts[j]; */
-			HostDataVolumnInfo *info = search_host_in_stat_context(context, hostname);
-			info->datavolumn += locations[i].length;
+			HostDataVolumeInfo *info = search_host_in_stat_context(context, hostname);
+			info->datavolume += locations[i].length;
 			hostIDs[i].hostIndextoSort[j].index = info->hashEntry->index;
 			hostIDs[i].hostIndextoSort[j].hostname = hostname;
 			if (output_hdfs_block_location) {
@@ -1577,7 +1604,7 @@ static int select_random_host_algorithm(Relation_Assignment_Context *context,
 		Block_Host_Index **hostID, int fileindex, Oid partition_parent_oid, bool* isLocality) {
 
 	*isLocality = false;
-	bool isExceedVolumn = false;
+	bool isExceedVolume = false;
 	bool isExceedWholeSize =false;
 	bool isExceedPartitionTableSize =false;
 	//step1
@@ -1596,7 +1623,7 @@ static int select_random_host_algorithm(Relation_Assignment_Context *context,
 		foreach(lc, val)
 		{
 			int j = lfirst_int(lc);
-			isExceedVolumn = splitsize + context->vols[j] > maxExtendedSizePerSegment;
+			isExceedVolume = splitsize + context->vols[j] > maxExtendedSizePerSegment;
 			isExceedWholeSize = balance_on_whole_query_level
 					&& splitsize + context->totalvols_with_penalty[j]
 							> context->avg_size_of_whole_query;
@@ -1616,7 +1643,7 @@ static int select_random_host_algorithm(Relation_Assignment_Context *context,
 				continue;
 			}
 			if ((!isExceedWholeSize || context->totalvols_with_penalty[j] == 0)
-					&& (!isExceedVolumn || context->vols[j] == 0)
+					&& (!isExceedVolume || context->vols[j] == 0)
 					&& (!isExceedPartitionTableSize || (*partitionvols_with_penalty)[j] ==0)) {
 				{
 					*isLocality = true;
@@ -1649,7 +1676,7 @@ static int select_random_host_algorithm(Relation_Assignment_Context *context,
 	minvols = INT64_MAX;
 	bool isFound = false;
 	for (int j = 0; j < context->virtual_segment_num; j++) {
-		isExceedVolumn = net_disk_ratio * splitsize + context->vols[j]
+		isExceedVolume = net_disk_ratio * splitsize + context->vols[j]
 				> maxExtendedSizePerSegment;
 		isExceedWholeSize = balance_on_whole_query_level
 				&& net_disk_ratio * splitsize + context->totalvols_with_penalty[j]
@@ -1666,7 +1693,7 @@ static int select_random_host_algorithm(Relation_Assignment_Context *context,
 			isExceedPartitionTableSize = false;
 		}
 		if ((!isExceedWholeSize || context->totalvols_with_penalty[j] == 0)
-				&& (!isExceedVolumn || context->vols[j] == 0)
+				&& (!isExceedVolume || context->vols[j] == 0)
 				&& (!isExceedPartitionTableSize || (*partitionvols_with_penalty)[j] ==0)) {
 			isFound = true;
 			if (minvols > context->vols[j]) {
@@ -1892,7 +1919,7 @@ search_map_node(List *result, Oid rel_oid, int host_num,
 
 static List *
 post_process_assign_result(Split_Assignment_Result *assign_result) {
-	List *final_result = NULL;
+	List *final_result = NIL;
 	int i;
 
 	for (i = 0; i < assign_result->host_num; i++) {
@@ -2297,7 +2324,7 @@ static void allocation_preparation(List *hosts, TargetSegmentIDMap* idMap,
 	{
 		VirtualSegmentNode *vsn = (VirtualSegmentNode *) lfirst(lc);
 
-		HostDataVolumnInfo *hdvInfo = search_host_in_stat_context(context,
+		HostDataVolumeInfo *hdvInfo = search_host_in_stat_context(context,
 				vsn->hostname);
 		idMap->global_IDs[i] = hdvInfo->hashEntry->index;
 
@@ -2471,12 +2498,12 @@ static Relation_File** change_file_order_based_on_continuity(
 }
 
 /*
- *set_maximum_segment_volumn_parameter
+ *set_maximum_segment_volume_parameter
  */
-static int64 set_maximum_segment_volumn_parameter(Relation_Data *rel_data,
+static int64 set_maximum_segment_volume_parameter(Relation_Data *rel_data,
 		int vseg_num, double *maxSizePerSegment) {
-	int64 maxSizePerSegmentDiffBigVolumn = 0;
-	int64 maxSizePerSegmentDiffSmallVolumn = 0;
+	int64 maxSizePerSegmentDiffBigVolume = 0;
+	int64 maxSizePerSegmentDiffSmallVolume = 0;
 	int64 maxSizePerSegmentDiffScalar = 0;
 	*maxSizePerSegment = rel_data->total_size / (double) vseg_num;
 	ListCell* lc_file;
@@ -2491,28 +2518,28 @@ static int64 set_maximum_segment_volumn_parameter(Relation_Data *rel_data,
 			}
 		}
 	}
-	double bigVolumnRatio = 0.001;
-	double smallVolumnRatio = 0.05;
-	maxSizePerSegmentDiffBigVolumn = *maxSizePerSegment * bigVolumnRatio;
-	maxSizePerSegmentDiffSmallVolumn = totalRelLastBlockSize / (double) vseg_num
-			* smallVolumnRatio;
+	double bigVolumeRatio = 0.001;
+	double smallVolumeRatio = 0.05;
+	maxSizePerSegmentDiffBigVolume = *maxSizePerSegment * bigVolumeRatio;
+	maxSizePerSegmentDiffSmallVolume = totalRelLastBlockSize / (double) vseg_num
+			* smallVolumeRatio;
 	maxSizePerSegmentDiffScalar = 32 << 20;
 
-	// when curSize > maxSizePerSegment, we allow some segments exceed the average volumns.
+	// when curSize > maxSizePerSegment, we allow some segments exceed the average volumes.
 	// with conditions: it less than 0.001* totalrelationsize and
 	// less than 32M(in case of Big Table such as 1T*0.001=1G which lead to data extremely
 	// imbalance) or it less than 0.05* the sum of size of all the last blocks of relation,
-	// which we call it as maxSizePerSegmentDiffSmallVolumn (consider we have 64 small files with 1.5M
+	// which we call it as maxSizePerSegmentDiffSmallVolume (consider we have 64 small files with 1.5M
 	// avg size and 16 segment to assign. maxSizePerSegmentshould be 1.5*4 =6M and we can allow
 	// a exceed about 6+ 6*0.05=6.3M)
-	if (maxSizePerSegmentDiffBigVolumn > maxSizePerSegmentDiffScalar){
-		maxSizePerSegmentDiffBigVolumn = maxSizePerSegmentDiffScalar;
+	if (maxSizePerSegmentDiffBigVolume > maxSizePerSegmentDiffScalar){
+		maxSizePerSegmentDiffBigVolume = maxSizePerSegmentDiffScalar;
 	}
-	if(maxSizePerSegmentDiffBigVolumn > maxSizePerSegmentDiffSmallVolumn){
-		return maxSizePerSegmentDiffBigVolumn + (int64)(*maxSizePerSegment) + 1;
+	if(maxSizePerSegmentDiffBigVolume > maxSizePerSegmentDiffSmallVolume){
+		return maxSizePerSegmentDiffBigVolume + (int64)(*maxSizePerSegment) + 1;
 	}
 	else{
-		return maxSizePerSegmentDiffSmallVolumn + (int64)(*maxSizePerSegment) + 1;
+		return maxSizePerSegmentDiffSmallVolume + (int64)(*maxSizePerSegment) + 1;
 	}
 }
 
@@ -2627,7 +2654,7 @@ static void allocate_random_relation(Relation_Data* rel_data,
 	 *size can be exceeded by different strategy for big and small table
 	 */
 	double maxSizePerSegment = 0.0;
-	int64 maxExtendedSizePerSegment = set_maximum_segment_volumn_parameter(rel_data,
+	int64 maxExtendedSizePerSegment = set_maximum_segment_volume_parameter(rel_data,
 			assignment_context->virtual_segment_num, &maxSizePerSegment);
 
 	/* sort file based on the ratio of continue local read.
@@ -3158,12 +3185,12 @@ static void allocate_random_relation(Relation_Data* rel_data,
 			elog(LOG, "total size of vs%d is "INT64_FORMAT"",j, assignment_context->totalvols[j]);
 			elog(LOG, "total size with penalty of vs%d is "INT64_FORMAT"",j, assignment_context->totalvols_with_penalty[j]);
 		}
-		elog(LOG, "avg,max,min volumn of segments are"
+		elog(LOG, "avg,max,min volume of segments are"
 		" %f,"INT64_FORMAT","INT64_FORMAT" for relation %u.",
 		maxSizePerSegment,maxvsSize,minvsSize,myrelid);
-		elog(LOG, "total max,min volumn of segments are "INT64_FORMAT","INT64_FORMAT" for relation %u.",
+		elog(LOG, "total max,min volume of segments are "INT64_FORMAT","INT64_FORMAT" for relation %u.",
 				totalMaxvsSize,totalMinvsSize,myrelid);
-		elog(LOG, "total max,min volumn with penalty of segments are "INT64_FORMAT","INT64_FORMAT" for relation %u.",
+		elog(LOG, "total max,min volume with penalty of segments are "INT64_FORMAT","INT64_FORMAT" for relation %u.",
 						totalMaxvsSizePenalty,totalMinvsSizePenalty,myrelid);
 	}
 
@@ -3194,7 +3221,7 @@ static int remedy_non_localRead(int fileIndex, int splitIndex, int parentPos,
 				bool isDone = false;
 				int orivseg = former_file->splits[j].host;
 				int64 former_split_size = former_file->splits[j].length;
-				// after swap with current split, the vseg should not exceed its volumn
+				// after swap with current split, the vseg should not exceed its volume
 				bool isExceedMaxSizeCurSplit = cur_file->splits[splitIndex].length
 						- former_split_size + assignment_context->vols[orivseg]
 						> maxExtendedSizePerSegment;
@@ -3289,7 +3316,7 @@ static void print_datalocality_overall_log_information(SplitAllocResult *result,
 	{
 		VirtualSegmentNode *vsn = (VirtualSegmentNode *) lfirst(lc);
 
-		HostDataVolumnInfo *hdvInfo = search_host_in_stat_context(context,
+		HostDataVolumeInfo *hdvInfo = search_host_in_stat_context(context,
 				vsn->hostname);
 		if (hdvInfo->occur_count > 0) {
 			if (hdvInfo->occur_count > log_context->maxSegmentNumofHost) {
@@ -3923,7 +3950,9 @@ static void cleanup_allocation_algorithm(
 		}
 	}
 
-	MemoryContextResetAndDeleteChildren(context->datalocality_memorycontext);
+	if(DataLocalityMemoryContext){
+	  MemoryContextResetAndDeleteChildren(DataLocalityMemoryContext);
+	}
 
 	return;
 }
@@ -3934,16 +3963,22 @@ static void cleanup_allocation_algorithm(
 SplitAllocResult *
 calculate_planner_segment_num(Query *query, QueryResourceLife resourceLife,
 		List *fullRangeTable, GpPolicy *intoPolicy, int sliceNum) {
-	SplitAllocResult *result;
+	SplitAllocResult *result = NULL;
 	QueryResource *resource = NULL;
-	List *virtual_segments;
-	List *alloc_result;
+	QueryResourceParameters *resource_parameters = NULL;
+
+	List *virtual_segments = NIL;
+	List *alloc_result = NIL;
 	split_to_segment_mapping_context context;
 
 	int planner_segments = -1; /*virtual segments number for explain statement */
 
 	result = (SplitAllocResult *) palloc(sizeof(SplitAllocResult));
+	result->resource = NULL;
+	result->resource_parameters = NULL;
+	result->alloc_results = NIL;
 	result->relsType = NIL;
+	result->planner_segments = -1;
 	result->datalocalityInfo = makeStringInfo();
 
 	/* fake data locality */
@@ -3955,267 +3990,306 @@ calculate_planner_segment_num(Query *query, QueryResourceLife resourceLife,
 		}
 	}
 
-	if ((Gp_role != GP_ROLE_DISPATCH)) {
+	if (Gp_role != GP_ROLE_DISPATCH) {
 		result->resource = NULL;
+		result->resource_parameters = NULL;
 		result->alloc_results = NIL;
 		result->relsType = NIL;
 		result->planner_segments = -1;
 		return result;
 	}
 
-	init_datalocality_memory_context();
+	PG_TRY();
+	{
+		init_datalocality_memory_context();
 
-	init_datalocality_context(&context);
+		init_datalocality_context(&context);
 
-	collect_range_tables(query, fullRangeTable, &(context.rtc_context));
+		resource_parameters = makeNode(QueryResourceParameters);
 
-	bool isTableFunctionExists = false;
+		collect_range_tables(query, fullRangeTable, &(context.rtc_context));
 
-	/*
-	 * the number of virtual segments is determined by 5 factors:
-	 * 1 bucket number of external table
-	 * 2 whether function exists
-	 * 3 bucket number of hash result relation
-	 * 4 bucket number of hash "from" relation
-	 * 5 data size of random "from" relation
-	 */
+		bool isTableFunctionExists = false;
 
-	/*convert range table list to oid list and check whether table function exists
-	 *we keep a full range table list and a range table list without result relation separately
-	 */
-	convert_range_tables_to_oids_and_check_table_functions(
-			&(context.rtc_context.full_range_tables), &isTableFunctionExists,
-			context.datalocality_memorycontext);
-	convert_range_tables_to_oids_and_check_table_functions(
-			&(context.rtc_context.range_tables), &isTableFunctionExists,
-			context.datalocality_memorycontext);
-
-	/*Table Function VSeg Number = default_segment_number(configured in GUC) if table function exists,
-	 *0 Otherwise.
-	 */
-	if (isTableFunctionExists) {
-		context.tableFuncSegNum = default_segment_num;
-	}
-
-	/* set expected virtual segment number for hash table and external table*/
-	/* calculate hashSegNum, externTableSegNum, resultRelationHashSegNum */
-	check_keep_hash_and_external_table(&context, query, intoPolicy);
-
-	/* get block location and calculate relation size*/
-	get_block_locations_and_claculte_table_size(&context);
-
-	/*use inherit resource*/
-	if (resourceLife == QRL_INHERIT) {
-		resource = AllocateResource(resourceLife, sliceNum, 0, 0, 0, NULL, 0);
-		if (resource != NULL) {
-			if ((context.keep_hash)
-					&& (list_length(resource->segments) != context.hashSegNum)) {
-				context.keep_hash = false;
-			}
-		}
-	}
-
-	/*allocate new resource*/
-	if (((resourceLife == QRL_INHERIT) && (resource == NULL))
-			|| (resourceLife == QRL_ONCE) || (resourceLife == QRL_NONE)) {
-		/*generate hostname-volumn pair to help RM to choose a host with
-		 *maximum data locality(only when the vseg number less than host number)
+		/*
+		 * the number of virtual segments is determined by 5 factors:
+		 * 1 bucket number of external table
+		 * 2 whether function exists
+		 * 3 bucket number of hash result relation
+		 * 4 bucket number of hash "from" relation
+		 * 5 data size of random "from" relation
 		 */
-		if(enable_prefer_list_to_rm){
-			context.host_context.size = context.dds_context.size;
-			MemoryContextSwitchTo(context.datalocality_memorycontext);
-			context.host_context.hostnameVolInfos = (HostnameVolumnInfo *) palloc(
-					sizeof(HostnameVolumnInfo) * context.host_context.size);
-			for (int i = 0; i < context.host_context.size; i++) {
-				MemSet(&(context.host_context.hostnameVolInfos[i].hostname), 0,
-						HOSTNAME_MAX_LENGTH);
-				strncpy(context.host_context.hostnameVolInfos[i].hostname,
-						context.dds_context.volInfos[i].hashEntry->key.hostname,
-						HOSTNAME_MAX_LENGTH-1);
-				context.host_context.hostnameVolInfos[i].datavolumn = context.dds_context.volInfos[i].datavolumn;
+
+		/*convert range table list to oid list and check whether table function exists
+		 *we keep a full range table list and a range table list without result relation separately
+		 */
+		convert_range_tables_to_oids_and_check_table_functions(
+				&(context.rtc_context.full_range_tables), &isTableFunctionExists,
+				context.datalocality_memorycontext);
+		convert_range_tables_to_oids_and_check_table_functions(
+				&(context.rtc_context.range_tables), &isTableFunctionExists,
+				context.datalocality_memorycontext);
+
+		/*Table Function VSeg Number = default_segment_number(configured in GUC) if table function exists,
+		 *0 Otherwise.
+		 */
+		if (isTableFunctionExists) {
+			context.tableFuncSegNum = default_segment_num;
+		}
+
+		/* set expected virtual segment number for hash table and external table*/
+		/* calculate hashSegNum, externTableSegNum, resultRelationHashSegNum */
+		check_keep_hash_and_external_table(&context, query, intoPolicy);
+
+		/* get block location and calculate relation size*/
+		get_block_locations_and_claculte_table_size(&context);
+
+		/*use inherit resource*/
+		if (resourceLife == QRL_INHERIT) {
+			resource = AllocateResource(resourceLife, sliceNum, 0, 0, 0, NULL, 0);
+
+			saveQueryResourceParameters(
+							resource_parameters,  /* resource_parameters */
+							resourceLife,         /* life */
+							sliceNum,             /* slice_size */
+							0,                    /* iobytes */
+							0,                    /* max_target_segment_num */
+							0,                    /* min_target_segment_num */
+							NULL,                 /* vol_info */
+							0                     /* vol_info_size */
+							);
+
+			if (resource != NULL) {
+				if ((context.keep_hash)
+						&& (list_length(resource->segments) != context.hashSegNum)) {
+					context.keep_hash = false;
+				}
 			}
-			MemoryContextSwitchTo(context.old_memorycontext);
-		}else{
-			context.host_context.size = 0;
-			context.host_context.hostnameVolInfos = NULL;
 		}
 
-		/* determine the random table segment number by the following 4 steps*/
-		/* Step1 we expect one split(block) processed by one virtual segment*/
-		context.randomSegNum = context.total_split_count;
-		/* Step2 combine segment when splits are with small size*/
-		int64 min_split_size = min_datasize_to_combine_segment; /*default 128M*/
-		min_split_size <<= 20;
-		int expected_segment_num_with_minsize = (context.total_size + min_split_size - 1)
-				/ min_split_size;
-		if (context.randomSegNum > expected_segment_num_with_minsize) {
-			context.randomSegNum = expected_segment_num_with_minsize;
-		}
-		/* Step3 split segment when there are tow many files (default add one more segment per 100(guc) files)*/
-		int expected_segment_num_with_max_filecount = (context.total_file_count
-				+ max_filecount_notto_split_segment - 1)
-				/ max_filecount_notto_split_segment;
-		if (context.randomSegNum < expected_segment_num_with_max_filecount) {
-			context.randomSegNum = expected_segment_num_with_max_filecount;
-		}
-		/* Step4 we at least use one segment*/
-		if (context.randomSegNum < minimum_segment_num) {
-			context.randomSegNum = minimum_segment_num;
-		}
-
-		int maxExpectedNonRandomSegNum = 0;
-		if (maxExpectedNonRandomSegNum < context.externTableSegNum)
-			maxExpectedNonRandomSegNum = context.externTableSegNum;
-		if (maxExpectedNonRandomSegNum < context.tableFuncSegNum)
-			maxExpectedNonRandomSegNum = context.tableFuncSegNum;
-		if (maxExpectedNonRandomSegNum < context.hashSegNum)
-			maxExpectedNonRandomSegNum = context.hashSegNum;
-
-		if (debug_fake_segmentnum){
-			fpsegnum = fopen("/tmp/segmentnumber", "w+");
-			fprintf(fpsegnum, "Default segment num : %d.\n", default_segment_num);
-			fprintf(fpsegnum, "\n");
-			fprintf(fpsegnum, "From random relation segment num : %d.\n", context.randomSegNum);
-			fprintf(fpsegnum, "Result relation hash segment num : %d.\n", context.resultRelationHashSegNum);
-			fprintf(fpsegnum, "\n");
-			fprintf(fpsegnum, "Table  function      segment num : %d.\n", context.tableFuncSegNum);
-			fprintf(fpsegnum, "Extern table         segment num : %d.\n", context.externTableSegNum);
-			fprintf(fpsegnum, "From hash relation   segment num : %d.\n", context.hashSegNum);
-			fprintf(fpsegnum, "MaxExpectedNonRandom segment num : %d.\n", maxExpectedNonRandomSegNum);
-			fprintf(fpsegnum, "\n");
-		}
-
-		int minTargetSegmentNumber = 0;
-		int maxTargetSegmentNumber = 0;
-		/* we keep resultRelationHashSegNum in the highest priority*/
-		if (context.resultRelationHashSegNum != 0) {
-			if (context.resultRelationHashSegNum < context.externTableSegNum
-					&& context.externTableSegNum != 0) {
-				cleanup_allocation_algorithm(&context);
-				elog(ERROR, "Could not allocate enough memory! "
-						"bucket number of result hash table and external table should match each other");
+		/*allocate new resource*/
+		if (((resourceLife == QRL_INHERIT) && (resource == NULL))
+				|| (resourceLife == QRL_ONCE) || (resourceLife == QRL_NONE)) {
+			/*generate hostname-volume pair to help RM to choose a host with
+			 *maximum data locality(only when the vseg number less than host number)
+			 */
+			if(enable_prefer_list_to_rm){
+				context.host_context.size = context.dds_context.size;
+				MemoryContextSwitchTo(context.datalocality_memorycontext);
+				context.host_context.hostnameVolInfos = (HostnameVolumeInfo *) palloc(
+						sizeof(HostnameVolumeInfo) * context.host_context.size);
+				for (int i = 0; i < context.host_context.size; i++) {
+					MemSet(&(context.host_context.hostnameVolInfos[i].hostname), 0,
+							HOSTNAME_MAX_LENGTH);
+					strncpy(context.host_context.hostnameVolInfos[i].hostname,
+							context.dds_context.volInfos[i].hashEntry->key.hostname,
+							HOSTNAME_MAX_LENGTH-1);
+					context.host_context.hostnameVolInfos[i].datavolume = context.dds_context.volInfos[i].datavolume;
+				}
+				MemoryContextSwitchTo(context.old_memorycontext);
+			}else{
+				context.host_context.size = 0;
+				context.host_context.hostnameVolInfos = NULL;
 			}
-			maxTargetSegmentNumber = context.resultRelationHashSegNum;
-			minTargetSegmentNumber = context.resultRelationHashSegNum;
-		} else if (maxExpectedNonRandomSegNum > 0) {
-			/* bucket number of external table must be the same with the number of virtual segments*/
-			if (maxExpectedNonRandomSegNum == context.externTableSegNum) {
-				context.externTableSegNum =
-						context.externTableSegNum < minimum_segment_num ?
-								minimum_segment_num : context.externTableSegNum;
-				maxTargetSegmentNumber = context.externTableSegNum;
-				minTargetSegmentNumber = context.externTableSegNum;
-			} else if (maxExpectedNonRandomSegNum == context.hashSegNum) {
-				/* in general, we keep bucket number of hash table equals to the number of virtual segments
-				 * but this rule can be broken when there is a large random table in the range tables list
-				 */
-				context.hashSegNum =
-						context.hashSegNum < minimum_segment_num ?
-						minimum_segment_num : context.hashSegNum;
-				double considerRandomWhenHashExistRatio = 1.5;
-				/*if size of random table >1.5 *hash table, we consider relax the restriction of hash bucket number*/
-				if (context.randomRelSize
-						> considerRandomWhenHashExistRatio * context.hashRelSize) {
-					if (context.randomSegNum < context.hashSegNum) {
-						context.randomSegNum = context.hashSegNum;
+
+			/* determine the random table segment number by the following 4 steps*/
+			/* Step1 we expect one split(block) processed by one virtual segment*/
+			context.randomSegNum = context.total_split_count;
+			/* Step2 combine segment when splits are with small size*/
+			int64 min_split_size = min_datasize_to_combine_segment; /*default 128M*/
+			min_split_size <<= 20;
+			int expected_segment_num_with_minsize = (context.total_size + min_split_size - 1)
+					/ min_split_size;
+			if (context.randomSegNum > expected_segment_num_with_minsize) {
+				context.randomSegNum = expected_segment_num_with_minsize;
+			}
+			/* Step3 split segment when there are tow many files (default add one more segment per 100(guc) files)*/
+			int expected_segment_num_with_max_filecount = (context.total_file_count
+					+ max_filecount_notto_split_segment - 1)
+					/ max_filecount_notto_split_segment;
+			if (context.randomSegNum < expected_segment_num_with_max_filecount) {
+				context.randomSegNum = expected_segment_num_with_max_filecount;
+			}
+			/* Step4 we at least use one segment*/
+			if (context.randomSegNum < minimum_segment_num) {
+				context.randomSegNum = minimum_segment_num;
+			}
+
+			int maxExpectedNonRandomSegNum = 0;
+			if (maxExpectedNonRandomSegNum < context.externTableSegNum)
+				maxExpectedNonRandomSegNum = context.externTableSegNum;
+			if (maxExpectedNonRandomSegNum < context.tableFuncSegNum)
+				maxExpectedNonRandomSegNum = context.tableFuncSegNum;
+			if (maxExpectedNonRandomSegNum < context.hashSegNum)
+				maxExpectedNonRandomSegNum = context.hashSegNum;
+
+			if (debug_fake_segmentnum){
+				fpsegnum = fopen("/tmp/segmentnumber", "w+");
+				fprintf(fpsegnum, "Default segment num : %d.\n", default_segment_num);
+				fprintf(fpsegnum, "\n");
+				fprintf(fpsegnum, "From random relation segment num : %d.\n", context.randomSegNum);
+				fprintf(fpsegnum, "Result relation hash segment num : %d.\n", context.resultRelationHashSegNum);
+				fprintf(fpsegnum, "\n");
+				fprintf(fpsegnum, "Table  function      segment num : %d.\n", context.tableFuncSegNum);
+				fprintf(fpsegnum, "Extern table         segment num : %d.\n", context.externTableSegNum);
+				fprintf(fpsegnum, "From hash relation   segment num : %d.\n", context.hashSegNum);
+				fprintf(fpsegnum, "MaxExpectedNonRandom segment num : %d.\n", maxExpectedNonRandomSegNum);
+				fprintf(fpsegnum, "\n");
+			}
+
+			int minTargetSegmentNumber = 0;
+			int maxTargetSegmentNumber = 0;
+			/* we keep resultRelationHashSegNum in the highest priority*/
+			if (context.resultRelationHashSegNum != 0) {
+				if (context.resultRelationHashSegNum < context.externTableSegNum
+						&& context.externTableSegNum != 0) {
+					cleanup_allocation_algorithm(&context);
+					elog(ERROR, "Could not allocate enough memory! "
+							"bucket number of result hash table and external table should match each other");
+				}
+				maxTargetSegmentNumber = context.resultRelationHashSegNum;
+				minTargetSegmentNumber = context.resultRelationHashSegNum;
+			} else if (maxExpectedNonRandomSegNum > 0) {
+				/* bucket number of external table must be the same with the number of virtual segments*/
+				if (maxExpectedNonRandomSegNum == context.externTableSegNum) {
+					context.externTableSegNum =
+							context.externTableSegNum < minimum_segment_num ?
+									minimum_segment_num : context.externTableSegNum;
+					maxTargetSegmentNumber = context.externTableSegNum;
+					minTargetSegmentNumber = context.externTableSegNum;
+				} else if (maxExpectedNonRandomSegNum == context.hashSegNum) {
+					/* in general, we keep bucket number of hash table equals to the number of virtual segments
+					 * but this rule can be broken when there is a large random table in the range tables list
+					 */
+					context.hashSegNum =
+							context.hashSegNum < minimum_segment_num ?
+							minimum_segment_num : context.hashSegNum;
+					double considerRandomWhenHashExistRatio = 1.5;
+					/*if size of random table >1.5 *hash table, we consider relax the restriction of hash bucket number*/
+					if (context.randomRelSize
+							> considerRandomWhenHashExistRatio * context.hashRelSize) {
+						if (context.randomSegNum < context.hashSegNum) {
+							context.randomSegNum = context.hashSegNum;
+						}
+						maxTargetSegmentNumber = context.randomSegNum;
+						minTargetSegmentNumber = minimum_segment_num;
+					} else {
+						maxTargetSegmentNumber = context.hashSegNum;
+						minTargetSegmentNumber = context.hashSegNum;
+					}
+				} else if (maxExpectedNonRandomSegNum == context.tableFuncSegNum) {
+					/* if there is a table function, we should at least use tableFuncSegNum virtual segments*/
+					context.tableFuncSegNum =
+							context.tableFuncSegNum < minimum_segment_num ?
+									minimum_segment_num : context.tableFuncSegNum;
+					if (context.randomSegNum < context.tableFuncSegNum) {
+						context.randomSegNum = context.tableFuncSegNum;
 					}
 					maxTargetSegmentNumber = context.randomSegNum;
 					minTargetSegmentNumber = minimum_segment_num;
-				} else {
-					maxTargetSegmentNumber = context.hashSegNum;
-					minTargetSegmentNumber = context.hashSegNum;
 				}
-			} else if (maxExpectedNonRandomSegNum == context.tableFuncSegNum) {
-				/* if there is a table function, we should at least use tableFuncSegNum virtual segments*/
-				context.tableFuncSegNum =
-						context.tableFuncSegNum < minimum_segment_num ?
-								minimum_segment_num : context.tableFuncSegNum;
-				if (context.randomSegNum < context.tableFuncSegNum) {
-					context.randomSegNum = context.tableFuncSegNum;
-				}
+			} else {
 				maxTargetSegmentNumber = context.randomSegNum;
 				minTargetSegmentNumber = minimum_segment_num;
 			}
-		} else {
-			maxTargetSegmentNumber = context.randomSegNum;
-			minTargetSegmentNumber = minimum_segment_num;
+
+			if (enforce_virtual_segment_number > 0) {
+				maxTargetSegmentNumber = enforce_virtual_segment_number;
+				minTargetSegmentNumber = enforce_virtual_segment_number;
+			}
+			uint64_t before_rm_allocate_resource = gettime_microsec();
+
+			/* cost is use by RM to balance workload between hosts. the cost is at least one block size*/
+			int64 mincost = min_cost_for_each_query;
+			mincost <<= 20;
+			int64 queryCost = context.total_size < mincost ? mincost : context.total_size;
+			if (QRL_NONE != resourceLife) {
+				resource = AllocateResource(QRL_ONCE, sliceNum, queryCost,
+						maxTargetSegmentNumber, minTargetSegmentNumber,
+						context.host_context.hostnameVolInfos, context.host_context.size);
+
+				saveQueryResourceParameters(
+								resource_parameters,                   /* resource_parameters */
+								QRL_ONCE,                              /* life */
+								sliceNum,                              /* slice_size */
+								queryCost,                             /* iobytes */
+								maxTargetSegmentNumber,                /* max_target_segment_num */
+								minTargetSegmentNumber,                /* min_target_segment_num */
+								context.host_context.hostnameVolInfos, /* vol_info */
+								context.host_context.size              /* vol_info_size */
+								);
+
+			}
+			/* for explain statement, we doesn't allocate resource physically*/
+			else {
+				uint32 seg_num, seg_num_min, seg_memory_mb;
+				double seg_core;
+				GetResourceQuota(maxTargetSegmentNumber, minTargetSegmentNumber, &seg_num,
+						&seg_num_min, &seg_memory_mb, &seg_core);
+				planner_segments = seg_num;
+			}
+			uint64_t after_rm_allocate_resource = gettime_microsec();
+			int eclaspeTime = after_rm_allocate_resource - before_rm_allocate_resource;
+			if(debug_datalocality_time){
+				elog(LOG, "rm allocate resource overall execution time: %d us. \n", eclaspeTime);
+			}
+
+			if (resource == NULL) {
+				result->resource = NULL;
+				result->resource_parameters = NULL;
+				result->alloc_results = NIL;
+				result->relsType = NIL;
+				result->planner_segments = planner_segments;
+				return result;
+			}
+
+			if (debug_fake_segmentnum){
+				fprintf(fpsegnum, "Target segment num Min: %d.\n", minTargetSegmentNumber);
+				fprintf(fpsegnum, "Target segment num Max: %d.\n", maxTargetSegmentNumber);
+			}
 		}
 
-		if (enforce_virtual_segment_number > 0) {
-			maxTargetSegmentNumber = enforce_virtual_segment_number;
-			minTargetSegmentNumber = enforce_virtual_segment_number;
-		}
-		uint64_t before_rm_allocate_resource = gettime_microsec();
+		MemoryContextSwitchTo(context.datalocality_memorycontext);
 
-		/* cost is use by RM to balance workload between hosts. the cost is at least one block size*/
-		int64 mincost = min_cost_for_each_query;
-		mincost <<= 20;
-		int64 queryCost = context.total_size < mincost ? mincost : context.total_size;
-		if (QRL_NONE != resourceLife) {
-			resource = AllocateResource(QRL_ONCE, sliceNum, queryCost,
-					maxTargetSegmentNumber, minTargetSegmentNumber,
-					context.host_context.hostnameVolInfos, context.host_context.size);
-		}
-		/* for explain statement, we doesn't allocate resource physically*/
-		else {
-			uint32 seg_num, seg_num_min, seg_memory_mb;
-			double seg_core;
-			GetResourceQuota(maxTargetSegmentNumber, minTargetSegmentNumber, &seg_num,
-					&seg_num_min, &seg_memory_mb, &seg_core);
-			planner_segments = seg_num;
-		}
-		uint64_t after_rm_allocate_resource = gettime_microsec();
-		int eclaspeTime = after_rm_allocate_resource - before_rm_allocate_resource;
-		if(debug_datalocality_time){
-			elog(LOG, "rm allocate resource overall execution time: %d us. \n", eclaspeTime);
-		}
+		virtual_segments = get_virtual_segments(resource);
 
-		if (resource == NULL) {
-			result->resource = NULL;
-			result->alloc_results = NIL;
-			result->planner_segments = planner_segments;
-			return result;
-		}
+		int VirtualSegmentNumber = list_length(virtual_segments);
 
 		if (debug_fake_segmentnum){
-			fprintf(fpsegnum, "Target segment num Min: %d.\n", minTargetSegmentNumber);
-			fprintf(fpsegnum, "Target segment num Max: %d.\n", maxTargetSegmentNumber);
+			fprintf(fpsegnum, "Real   segment num    : %d.\n", VirtualSegmentNumber);
+			fflush(fpsegnum);
+			fclose(fpsegnum);
+			fpsegnum = NULL;
+			elog(ERROR, "Abort fake segment number!");
 		}
+
+		/* for normal query if containerCount equals to 0, then stop the query.*/
+		if (resourceLife != QRL_NONE && VirtualSegmentNumber == 0) {
+			cleanup_allocation_algorithm(&context);
+			elog(ERROR, "Could not allocate enough resource!");
+		}
+
+		MemoryContextSwitchTo(context.old_memorycontext);
+
+		/* data locality allocation algorithm*/
+		alloc_result = run_allocation_algorithm(result, virtual_segments, &resource, &context);
+
+		result->resource = resource;
+		result->resource_parameters = resource_parameters;
+		result->alloc_results = alloc_result;
+		result->planner_segments = list_length(resource->segments);
 	}
-
-	MemoryContextSwitchTo(context.datalocality_memorycontext);
-
-	virtual_segments = get_virtual_segments(resource);
-
-	int VirtualSegmentNumber = list_length(virtual_segments);
-
-	if (debug_fake_segmentnum){
-		fprintf(fpsegnum, "Real   segment num    : %d.\n", VirtualSegmentNumber);
-		fflush(fpsegnum);
-		fclose(fpsegnum);
-		fpsegnum = NULL;
-		elog(ERROR, "Abort fake segment number!");
-	}
-
-	/* for normal query if containerCount equals to 0, then stop the query.*/
-	if (resourceLife != QRL_NONE && VirtualSegmentNumber == 0) {
+	PG_CATCH();
+	{
 		cleanup_allocation_algorithm(&context);
-		elog(ERROR, "Could not allocate enough resource!");
+		PG_RE_THROW();
 	}
-
-	MemoryContextSwitchTo(context.old_memorycontext);
-
-	/* data locality allocation algorithm*/
-	alloc_result = run_allocation_algorithm(result, virtual_segments, &resource, &context);
-
-	result->resource = resource;
-	result->alloc_results = alloc_result;
-	result->planner_segments = list_length(resource->segments);
-
+	PG_END_TRY();
 	cleanup_allocation_algorithm(&context);
 
 	if(debug_datalocality_time){
 		elog(ERROR, "Abort debug metadata, datalocality, rm Time.");
 	}
+
 	return result;
 }

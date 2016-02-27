@@ -49,6 +49,7 @@
 #include "utils/builtins.h"
 #include "utils/debugbreak.h"
 #include "utils/pg_crc.h"
+#include "port/pg_crc32c.h"
 
 #include "cdb/cdbselect.h"
 #include "cdb/tupchunklist.h"
@@ -4662,8 +4663,9 @@ addCRC(icpkthdr *pkt)
 {
 	pg_crc32 local_crc;
 
-	local_crc = crc32c(crc32cInit(), pkt, pkt->len);
-	crc32cFinish(local_crc);
+	INIT_CRC32C(local_crc);
+ 	COMP_CRC32C(local_crc, pkt, pkt->len);
+ 	FIN_CRC32C(local_crc);
 
 	pkt->crc = local_crc;
 }
@@ -4680,8 +4682,9 @@ checkCRC(icpkthdr *pkt)
 	rx_crc = pkt->crc;
 	pkt->crc = 0;
 
-	local_crc = crc32c(crc32cInit(), pkt, pkt->len);
-	crc32cFinish(local_crc);
+	INIT_CRC32C(local_crc);
+ 	COMP_CRC32C(local_crc, pkt, pkt->len);
+ 	FIN_CRC32C(local_crc);
 
 	if (rx_crc != local_crc)
 	{
@@ -5876,54 +5879,13 @@ formatSockAddr(struct sockaddr *sa, char* buf, int bufsize)
 }								/* formatSockAddr */
 
 /*
- * dispatcherAYT
- * 		Check the connection from the dispatcher to verify that it is still there.
- *
- * The connection is a struct Port, stored in the global MyProcPort.
- *
- * Return true if the dispatcher connection is still alive.
- */
-static bool
-dispatcherAYT(void)
-{
-	ssize_t		ret;
-	char		buf;
-
-	if (MyProcPort->sock < 0)
-		return false;
-
-#ifndef WIN32
-		ret = recv(MyProcPort->sock, &buf, 1, MSG_PEEK|MSG_DONTWAIT);
-#else
-		ret = recv(MyProcPort->sock, &buf, 1, MSG_PEEK|MSG_PARTIAL);
-#endif
-
-	if (ret == 0) /* socket has been closed. EOF */
-		return false;
-
-	if (ret > 0) /* data waiting on socket, it must be OK. */
-		return true;
-
-	if (ret == -1) /* error, or would be block. */
-	{
-		if (errno == EAGAIN || errno == EINPROGRESS)
-			return true; /* connection intact, no data available */
-		else
-			return false;
-	}
-	/* not reached */
-
-	return true;
-}
-
-/*
  * checkQDConnectionAlive
  * 		Check whether QD connection is still alive. If not, report error.
  */
 static void
 checkQDConnectionAlive(void)
 {
-	if (!dispatcherAYT())
+	if (!dispatch_validate_conn(MyProcPort->sock))
 	{
 		if (Gp_role == GP_ROLE_EXECUTE)
 			ereport(ERROR, (errcode(ERRCODE_GP_INTERCONNECTION_ERROR),

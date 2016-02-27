@@ -82,9 +82,7 @@ order by relname;
  gp_db_interfaces
  gp_distribution_policy
  gp_fastsequence
- gp_fault_strategy
  gp_global_sequence
- gp_id
  gp_interfaces
  gp_master_mirroring
  gp_persistent_database_node

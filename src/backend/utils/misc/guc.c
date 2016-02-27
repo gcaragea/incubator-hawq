@@ -4503,7 +4503,7 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&default_segment_num,
-		2, 1, INT_MAX, NULL, NULL
+		8, 1, INT_MAX, NULL, NULL
 	},
 	{
 		{"enforce_virtual_segment_number", PGC_USERSET, QUERY_TUNING_OTHER,
@@ -4512,15 +4512,6 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&enforce_virtual_segment_number,
-		0, 0, INT_MAX, NULL, NULL
-	},
-	{
-		{"debug_fix_vseg_num", PGC_USERSET, QUERY_TUNING_OTHER,
-			gettext_noop("Sets fixed vseg number for debug"),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&debug_fix_vseg_num,
 		0, 0, INT_MAX, NULL, NULL
 	},
 	{
@@ -6888,7 +6879,7 @@ static struct config_real ConfigureNamesReal[] =
 			NULL
 		},
 		&rm_seg_core_use,
-		1.0, 1.0, INT_MAX, NULL, NULL
+		16.0, 1.0, INT_MAX, NULL, NULL
 	},
 
 	{
@@ -6975,7 +6966,7 @@ static struct config_real ConfigureNamesReal[] =
 	},
 	{
 		{"net_disk_ratio", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Sets the scan volumn ratio of disk against network."),
+			gettext_noop("Sets the scan volume ratio of disk against network."),
 	        NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
@@ -8107,7 +8098,7 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&rm_seg_memory_use,
-		"", NULL, NULL
+		"64GB", NULL, NULL
 	},
 
     {

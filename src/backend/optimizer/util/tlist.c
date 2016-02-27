@@ -209,6 +209,18 @@ TargetEntry *
 get_sortgroupclause_tle(SortClause *sortClause,
 						List *targetList)
 {
+    TargetEntry *ret = get_sortgroupclause_tle_internal(sortClause, targetList);
+    if (NULL == ret) {
+	    elog(ERROR, "ORDER/GROUP BY expression not found in targetlist");
+    }
+	
+	return ret;				/* keep compiler quiet */
+}
+
+TargetEntry *
+get_sortgroupclause_tle_internal(SortClause *sortClause,
+						List *targetList)
+{
 	Index		refnumber = sortClause->tleSortGroupRef;
 	ListCell   *l;
 
@@ -220,9 +232,9 @@ get_sortgroupclause_tle(SortClause *sortClause,
 			return tle;
 	}
 
-	elog(ERROR, "ORDER/GROUP BY expression not found in targetlist");
 	return NULL;				/* keep compiler quiet */
 }
+
 
 /*
  * get_sortgroupclauses_tles
@@ -316,6 +328,20 @@ get_sortgrouplist_exprs(List *sortClauses, List *targetList)
 	{
 		SortClause *sortcl = (SortClause *) lfirst(l);
 		Node	   *sortexpr;
+
+		/*
+		 * if GroupClause in grouping sets is null,
+		 * there is no need to build the referenced targetlist expr
+		 */
+		if (sortcl == NULL) continue;
+
+		/*
+		 * tleSortGroupRef in SortClause and ressortgroupref in TargetEntry
+		 * may be zero at the sametime, which means no reference by
+		 * sort/group clause. Should avoid calling get_sortgroupclause_expr
+		 * in this situation.
+		 */
+		if (sortcl->tleSortGroupRef == 0) continue;
 
 		sortexpr = get_sortgroupclause_expr(sortcl, targetList);
 		result = lappend(result, sortexpr);

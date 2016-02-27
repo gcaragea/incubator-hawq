@@ -497,6 +497,9 @@ int ResManagerMainServer2ndPhase(void)
 
 	elog(DEBUG5, "HAWQ RM :: passed loading queue and user definition.");
 
+	/* Check slaves file firstly to ensure we have expected cluster size. */
+	checkSlavesFile();
+
 	if ( rm_resourcepool_test_filename != NULL &&
 		 rm_resourcepool_test_filename[0] != '\0' ) {
 		loadHostInformationIntoResourcePool();
@@ -504,9 +507,6 @@ int ResManagerMainServer2ndPhase(void)
 
 	/******* TILL NOW, resource manager starts providing services *******/
 	elog(LOG, "HAWQ RM process works now.");
-
-	/* Check slaves file firstly to ensure we have expected cluster size. */
-	checkSlavesFile();
 
     /* Start request handler to provide services. */
     res = MainHandlerLoop();
@@ -533,6 +533,13 @@ int MainHandlerLoop(void)
 
 	while( DRMGlobalInstance->ResManagerMainKeepRun )
 	{
+		/* STEP 0. Check if postmaster process exists. */
+		if (!PostmasterIsAlive(true)) {
+			DRMGlobalInstance->ResManagerMainKeepRun = false;
+			elog(LOG, "Postmaster is not alive, resource manager exits");
+			break;
+		}
+
 		/* STEP 1. Check resource broker status. */
 		RB_start(true);
 
@@ -850,9 +857,6 @@ int initializeDRMInstance(MCTYPE context)
 	DRMGlobalInstance->ResBrokerAppTimeStamp    = 0;
 	DRMGlobalInstance->ResBrokerTriggerCleanup  = false;
 
-	DRMGlobalInstance->IncreaseMemoryRPCCounter = 0;
-	DRMGlobalInstance->DecreaseMemoryRPCCounter = 0;
-
 	/* Get local host name here to make all components able to use this info. */
 	initSimpleString(&(DRMGlobalInstance->SocketLocalHostName), 	   context);
 	res = getLocalHostName(&(DRMGlobalInstance->SocketLocalHostName));
@@ -1014,11 +1018,11 @@ int  loadDynamicResourceManagerConfigure(void)
 				 rm_segment_port);
 
 	/* Decide global resource manager mode. */
-	if ( strcmp(rm_global_rm_type, HAWQDRM_CONFFILE_SVRTYPE_VAL_YARN) == 0 )
+	if ( strcasecmp(rm_global_rm_type, HAWQDRM_CONFFILE_SVRTYPE_VAL_YARN) == 0 )
 	{
 		DRMGlobalInstance->ImpType = YARN_LIBYARN;
 	}
-	else if ( strcmp(rm_global_rm_type, HAWQDRM_CONFFILE_SVRTYPE_VAL_NONE) == 0 )
+	else if ( strcasecmp(rm_global_rm_type, HAWQDRM_CONFFILE_SVRTYPE_VAL_NONE) == 0 )
 	{
 		DRMGlobalInstance->ImpType = NONE_HAWQ2;
 	}

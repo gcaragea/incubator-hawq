@@ -32,7 +32,7 @@ include $(top_srcdir)/src/backend/common.mk
 
 
 cdb_init.sql: cdb_schema.sql filesystem.sql
-	cat $(call vpathsearch,cdb_schema.sql) $(call vpathsearch,cdb_external_extensions.sql) $(call vpathsearch,filesystem.sql) $(call vpathsearch,madlib.sql) > cdb_init.sql
+	cat $(call vpathsearch,cdb_schema.sql) $(call vpathsearch,cdb_external_extensions.sql) $(call vpathsearch,filesystem.sql) > cdb_init.sql
 
 cdb_schema.sql: cdb_schema.in
 			sed -e 's,@pkglibdir@,$(pkglibdir),g' \
@@ -108,7 +108,7 @@ POSTGRES_BKI_SRCS := $(addprefix $(top_srcdir)/src/include/catalog/,\
 	pg_namespace.h pg_conversion.h pg_depend.h \
 	pg_database.h pg_tablespace.h pg_pltemplate.h \
 	pg_authid.h pg_auth_members.h pg_shdepend.h pg_shdescription.h pg_resqueue.h \
-	gp_configuration.h gp_id.h gp_policy.h gp_version.h \
+	gp_configuration.h gp_policy.h gp_version.h \
 	gp_segment_config.h gp_san_config.h \
 	gp_verification_history.h \
 	pg_window.h \

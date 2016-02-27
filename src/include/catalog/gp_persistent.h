@@ -41,7 +41,6 @@
 #include "access/xlogdefs.h"
 #include "catalog/indexing.h"
 #include "catalog/gp_global_sequence.h"
-#include "catalog/gp_id.h"
 #include "catalog/pg_shdepend.h"
 
 #define int8 int64
@@ -581,10 +580,9 @@ inline static bool GpPersistent_SkipXLogInfo(
 		return true;
 	
 	/*
-	 * gp_id and pg_shdepend 
+	 * pg_shdepend 
 	 */
-	if (testOid == GpIdRelationId ||						// 5001
-		testOid == SharedDependRelationId)					// 1214
+	if (testOid == SharedDependRelationId)					// 1214
 		return true;
 
 	return false;
