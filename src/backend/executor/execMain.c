@@ -2927,7 +2927,7 @@ ExecEndPlan(PlanState *planstate, EState *estate)
 	{
 		if (resultRelInfo->ri_aoInsertDesc)
 			++aocount;
-		if (resultRelInfo->ri_parquetInsertDesc || resultRelInfo->ri_parquetSendBack)
+		if (resultRelInfo->ri_parquetInsertDesc || resultRelInfo->ri_insertSendBack)
 			++aocount;
 		resultRelInfo++;
 	}
@@ -2957,9 +2957,9 @@ ExecEndPlan(PlanState *planstate, EState *estate)
 		/*need add processing for parquet insert desc*/
 		if (resultRelInfo->ri_parquetInsertDesc){
 
-			AssertImply(resultRelInfo->ri_parquetSendBack, gp_parquet_insert_sort);
+			AssertImply(resultRelInfo->ri_insertSendBack, gp_parquet_insert_sort);
 
-			if (NULL != resultRelInfo->ri_parquetSendBack)
+			if (NULL != resultRelInfo->ri_insertSendBack)
 			{
 				/*
 				 * The Parquet part we just finished inserting into already
@@ -2985,10 +2985,10 @@ ExecEndPlan(PlanState *planstate, EState *estate)
 		 * in the resultRelInfo, since the ri_parquetInsertDesc is freed
 		 * (GPSQL-2291)
 		 */
-		if (NULL != resultRelInfo->ri_parquetSendBack)
+		if (NULL != resultRelInfo->ri_insertSendBack)
 		{
 			Assert(NULL == sendback);
-			sendback = resultRelInfo->ri_parquetSendBack;
+			sendback = resultRelInfo->ri_insertSendBack;
 		}
 
 		if (resultRelInfo->ri_extInsertDesc)
