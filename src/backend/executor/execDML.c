@@ -417,8 +417,7 @@ ExecInsert(TupleTableSlot *slot,
 			 * in estate, so that we can close it when switching to a
 			 * new partition (GPSQL-2291)
 			 */
-			elog(INFO, "PARQ: Saving es_last_parq_part. Old=%d, new=%d", estate->es_last_parq_part, resultRelationDesc->rd_id);
-			estate->es_last_parq_part = resultRelationDesc->rd_id;
+			elog(INFO, "PARQ: Saving es_last_inserted_part. Old=%d, new=%d", estate->es_last_inserted_part, resultRelationDesc->rd_id);
       estate->es_last_inserted_part = resultRelationDesc->rd_id;
 		}
 
