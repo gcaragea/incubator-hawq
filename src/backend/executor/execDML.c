@@ -203,6 +203,54 @@ ExecInsert(TupleTableSlot *slot,
 		 * inserted into (GPSQL-2291).
 		 */
 		Oid new_part_oid = resultRelInfo->ri_RelationDesc->rd_id;
+
+		if (optimizer_parts_to_force_sort_on_insert > 0 &&
+			PLANGEN_OPTIMIZER == planGen &&
+			InvalidOid != estate->es_last_inserted_part &&
+			new_part_oid != estate->es_last_inserted_part) 
+		{
+			
+		    Assert(NULL != estate->es_partition_state->result_partition_hash);
+
+		    ResultPartHashEntry *entry = hash_search(estate->es_partition_state->result_partition_hash,
+							     &estate->es_last_inserted_part,
+							     HASH_FIND,
+							     NULL /* found */);	
+
+		    Assert(NULL != entry);
+		    Assert(entry->offset < estate->es_num_result_relations);
+
+		    ResultRelInfo *oldResultRelInfo = & estate->es_result_relations[entry->offset];
+		    Assert(NULL != oldResultRelInfo);
+		    Assert(NULL != oldResultRelInfo->ri_aoInsertDesc);
+		    AppendOnlyInsertDescData *oldInsertDesc = oldResultRelInfo->ri_aoInsertDesc;
+
+		    elog(INFO, "AO: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
+					estate->es_last_inserted_part,
+					oldResultRelInfo->ri_RelationDesc->rd_rel->relname.data,
+					new_part_oid,
+					resultRelInfo->ri_RelationDesc->rd_rel->relname.data);
+
+		    /*
+		     * We need to preserve the "sendback" information that needs to be
+		     * sent back to the QD process from this part.
+		     * Compute it here, and store it for later use.
+		     */
+		    QueryContextDispatchingSendBack sendback = CreateQueryContextDispatchingSendBack(1);
+		    sendback->relid = RelationGetRelid(oldResultRelInfo->ri_RelationDesc);
+		    oldInsertDesc->sendback = sendback;
+
+		    appendonly_insert_finish(oldInsertDesc);
+
+		    /* Store the sendback information in the resultRelInfo for this part */
+		    oldResultRelInfo->ri_parquetSendBack = sendback;
+
+		    oldResultRelInfo->ri_aoInsertDesc = NULL;
+
+		    estate->es_last_inserted_part = InvalidOid;
+		
+		}
+
 		if (gp_parquet_insert_sort &&
 				PLANGEN_OPTIMIZER == planGen &&
 				InvalidOid != estate->es_last_parq_part &&
@@ -221,7 +269,7 @@ ExecInsert(TupleTableSlot *slot,
 
 			ResultRelInfo *oldResultRelInfo = & estate->es_result_relations[entry->offset];
 
-			elog(DEBUG1, "Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
+			elog(INFO, "PARQ: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
 					estate->es_last_parq_part,
 					oldResultRelInfo->ri_RelationDesc->rd_rel->relname.data,
 					new_part_oid,
@@ -362,7 +410,10 @@ ExecInsert(TupleTableSlot *slot,
 			resultRelInfo->ri_aoInsertDesc =
 				appendonly_insert_init(resultRelationDesc,
 									   segfileinfo);
+			elog(INFO, "AO: Saving es_last_inserted_part. Old=%d, new=%d",
+			     estate->es_last_inserted_part, resultRelationDesc->rd_id);
 
+			estate->es_last_inserted_part = resultRelationDesc->rd_id;
 		}
 
 		appendonly_insert(resultRelInfo->ri_aoInsertDesc, tuple, &newId, &aoTupleId);
@@ -391,7 +442,7 @@ ExecInsert(TupleTableSlot *slot,
 			 * in estate, so that we can close it when switching to a
 			 * new partition (GPSQL-2291)
 			 */
-			elog(DEBUG1, "Saving es_last_parq_part. Old=%d, new=%d", estate->es_last_parq_part, resultRelationDesc->rd_id);
+			elog(INFO, "PARQ: Saving es_last_parq_part. Old=%d, new=%d", estate->es_last_parq_part, resultRelationDesc->rd_id);
 			estate->es_last_parq_part = resultRelationDesc->rd_id;
 		}
 

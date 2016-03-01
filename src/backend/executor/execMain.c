@@ -2946,6 +2946,7 @@ ExecEndPlan(PlanState *planstate, EState *estate)
 		/* end (flush) the INSERT operation in the access layer */
 		if (resultRelInfo->ri_aoInsertDesc)
 		{
+
 			sendback = CreateQueryContextDispatchingSendBack(1);
 			resultRelInfo->ri_aoInsertDesc->sendback = sendback;
 			sendback->relid = RelationGetRelid(resultRelInfo->ri_RelationDesc);

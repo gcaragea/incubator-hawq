@@ -278,7 +278,7 @@ typedef struct JunkFilter
  *  aoInsertDesc        context for appendonly relation buffered INSERT
  *  extInsertDesc       context for external table INSERT
  *  parquetInsertDesc   context for parquet table INSERT
- *  parquetSendBack     information to be sent back to dispatch after INSERT in a parquet table
+ *  insertSendBack      information to be sent back to dispatch after INSERT in a parquet or AO table
  *  aosegno             the AO segfile we inserted into.
  *  aoprocessed         tuples processed for AO
  *  partInsertMap       map input attrno to target attrno
@@ -307,6 +307,7 @@ typedef struct ResultRelInfo
 
 	struct ExternalInsertDescData   *ri_extInsertDesc;
 	struct ParquetInsertDescData    *ri_parquetInsertDesc;
+
 	struct QueryContextDispatchingSendBackData *ri_parquetSendBack;
 
 	List *ri_aosegnos;
@@ -502,6 +503,7 @@ typedef struct EState
 	JunkFilter *es_junkFilter;        /* currently active junk filter */
 
 	Oid es_last_parq_part; /* The Oid of the last parquet partition we opened for insertion */
+	Oid es_last_inserted_part; /* The Oid of the last partition we opened for insertion */
 
 	/* partitioning info for target relation */
 	PartitionNode *es_result_partitions;

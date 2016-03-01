@@ -2074,6 +2074,9 @@ appendonly_insert_finish(AppendOnlyInsertDesc aoInsertDesc)
 	/*
 	 * Finish up that last varblock.
 	 */
+
+  elog(INFO, "Closing AO table oid=%d", aoInsertDesc->aoi_rel->rd_id);
+
 	finishWriteBlock(aoInsertDesc);
 
 	CloseWritableFileSeg(aoInsertDesc);
