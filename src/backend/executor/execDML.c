@@ -184,7 +184,7 @@ ExecInsert(TupleTableSlot *slot,
 		resultRelInfo = slot_get_partition(slot, estate);
 		estate->es_result_relation_info = resultRelInfo;
 
-		if (NULL != resultRelInfo->ri_parquetSendBack)
+		if (NULL != resultRelInfo->ri_insertSendBack)
 		{
 			/*
 			 * The Parquet part we are about to insert into
@@ -204,7 +204,7 @@ ExecInsert(TupleTableSlot *slot,
 		 */
 		Oid new_part_oid = resultRelInfo->ri_RelationDesc->rd_id;
 
-		if (optimizer_parts_to_force_sort_on_insert > 0 &&
+		if (9 > optimizer_parts_to_force_sort_on_insert &&
 			PLANGEN_OPTIMIZER == planGen &&
 			InvalidOid != estate->es_last_inserted_part &&
 			new_part_oid != estate->es_last_inserted_part) 
@@ -243,7 +243,7 @@ ExecInsert(TupleTableSlot *slot,
 		    appendonly_insert_finish(oldInsertDesc);
 
 		    /* Store the sendback information in the resultRelInfo for this part */
-		    oldResultRelInfo->ri_parquetSendBack = sendback;
+		    oldResultRelInfo->ri_insertSendBack = sendback;
 
 		    oldResultRelInfo->ri_aoInsertDesc = NULL;
 
@@ -295,7 +295,7 @@ ExecInsert(TupleTableSlot *slot,
 			parquet_insert_finish(oldInsertDesc);
 
 			/* Store the sendback information in the resultRelInfo for this part */
-			oldResultRelInfo->ri_parquetSendBack = sendback;
+			oldResultRelInfo->ri_insertSendBack = sendback;
 
 			/* Record in the resultRelInfo that we closed the parquet insert descriptor */
 			oldResultRelInfo->ri_parquetInsertDesc = NULL;

@@ -308,7 +308,7 @@ typedef struct ResultRelInfo
 	struct ExternalInsertDescData   *ri_extInsertDesc;
 	struct ParquetInsertDescData    *ri_parquetInsertDesc;
 
-	struct QueryContextDispatchingSendBackData *ri_parquetSendBack;
+	struct QueryContextDispatchingSendBackData *ri_insertSendBack;
 
 	List *ri_aosegnos;
 
