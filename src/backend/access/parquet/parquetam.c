@@ -675,7 +675,7 @@ Oid parquet_insert_values(ParquetInsertDesc parquetInsertDesc,
 void parquet_insert_finish(ParquetInsertDesc parquetInsertDesc) {
 	MemoryContext oldMemoryContext;
 
-	elog(INFO, "Closing Parquet table oid=%d", parquetInsertDesc->parquet_rel->rd_id);
+	elog(DEBUG1, "Closing Parquet table oid=%d", parquetInsertDesc->parquet_rel->rd_id);
 
 	oldMemoryContext = MemoryContextSwitchTo(parquetInsertDesc->memoryContext);
 

@@ -238,7 +238,7 @@ ExecInsert(TupleTableSlot *slot,
 		      AppendOnlyInsertDescData *oldInsertDesc = oldResultRelInfo->ri_aoInsertDesc;
 		      Assert(NULL != oldInsertDesc);
 
-		      elog(INFO, "AO: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
+		      elog(DEBUG1, "AO: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
 			   estate->es_last_inserted_part,
 			   oldResultRelInfo->ri_RelationDesc->rd_rel->relname.data,
 			   new_part_oid,
@@ -255,7 +255,7 @@ ExecInsert(TupleTableSlot *slot,
 		      ParquetInsertDescData *oldInsertDesc = oldResultRelInfo->ri_parquetInsertDesc;
 		      Assert(NULL != oldInsertDesc);
 
-		      elog(INFO, "PARQ: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
+		      elog(DEBUG1, "PARQ: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
 			   estate->es_last_inserted_part,
 			   oldResultRelInfo->ri_RelationDesc->rd_rel->relname.data,
 			   new_part_oid,
@@ -385,7 +385,7 @@ ExecInsert(TupleTableSlot *slot,
 			resultRelInfo->ri_aoInsertDesc =
 				appendonly_insert_init(resultRelationDesc,
 									   segfileinfo);
-			elog(INFO, "AO: Saving es_last_inserted_part. Old=%d, new=%d",
+			elog(DEBUG1, "AO: Saving es_last_inserted_part. Old=%d, new=%d",
 			     estate->es_last_inserted_part, resultRelationDesc->rd_id);
 
 			estate->es_last_inserted_part = resultRelationDesc->rd_id;
@@ -417,7 +417,7 @@ ExecInsert(TupleTableSlot *slot,
 			 * in estate, so that we can close it when switching to a
 			 * new partition (GPSQL-2291)
 			 */
-			elog(INFO, "PARQ: Saving es_last_inserted_part. Old=%d, new=%d", estate->es_last_inserted_part, resultRelationDesc->rd_id);
+			elog(DEBUG1, "PARQ: Saving es_last_inserted_part. Old=%d, new=%d", estate->es_last_inserted_part, resultRelationDesc->rd_id);
       estate->es_last_inserted_part = resultRelationDesc->rd_id;
 		}
 
