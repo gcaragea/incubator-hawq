@@ -247,6 +247,7 @@ ExecInsert(TupleTableSlot *slot,
 		      oldInsertDesc->sendback = sendback;
 		      
 		      appendonly_insert_finish(oldInsertDesc);
+		    oldResultRelInfo->ri_aoInsertDesc = NULL;
 
 		    } 
 		    else if (RelationIsParquet(oldRelation))
@@ -263,6 +264,7 @@ ExecInsert(TupleTableSlot *slot,
 		      oldInsertDesc->sendback = sendback;
 
 		      parquet_insert_finish(oldInsertDesc);
+		    oldResultRelInfo->ri_parquetInsertDesc = NULL;
 	
 		    }
 		    else 
@@ -273,10 +275,7 @@ ExecInsert(TupleTableSlot *slot,
 		    /* Store the sendback information in the resultRelInfo for this part */
 		    oldResultRelInfo->ri_insertSendBack = sendback;
 
-		    oldResultRelInfo->ri_aoInsertDesc = NULL;
-
 		    estate->es_last_inserted_part = InvalidOid;
-		
 		}
 
 	}
@@ -420,6 +419,7 @@ ExecInsert(TupleTableSlot *slot,
 			 */
 			elog(INFO, "PARQ: Saving es_last_parq_part. Old=%d, new=%d", estate->es_last_parq_part, resultRelationDesc->rd_id);
 			estate->es_last_parq_part = resultRelationDesc->rd_id;
+      estate->es_last_inserted_part = resultRelationDesc->rd_id;
 		}
 
 		newId = parquet_insert(resultRelInfo->ri_parquetInsertDesc, partslot);
