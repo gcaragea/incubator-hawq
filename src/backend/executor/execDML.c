@@ -222,14 +222,7 @@ ExecInsert(TupleTableSlot *slot,
 
 		    ResultRelInfo *oldResultRelInfo = & estate->es_result_relations[entry->offset];
 		    Assert(NULL != oldResultRelInfo);
-		    Assert(NULL != oldResultRelInfo->ri_aoInsertDesc);
-		    AppendOnlyInsertDescData *oldInsertDesc = oldResultRelInfo->ri_aoInsertDesc;
 
-		    elog(INFO, "AO: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
-					estate->es_last_inserted_part,
-					oldResultRelInfo->ri_RelationDesc->rd_rel->relname.data,
-					new_part_oid,
-					resultRelInfo->ri_RelationDesc->rd_rel->relname.data);
 
 		    /*
 		     * We need to preserve the "sendback" information that needs to be
@@ -238,9 +231,44 @@ ExecInsert(TupleTableSlot *slot,
 		     */
 		    QueryContextDispatchingSendBack sendback = CreateQueryContextDispatchingSendBack(1);
 		    sendback->relid = RelationGetRelid(oldResultRelInfo->ri_RelationDesc);
-		    oldInsertDesc->sendback = sendback;
 
-		    appendonly_insert_finish(oldInsertDesc);
+		    Relation oldRelation = oldResultRelInfo->ri_RelationDesc;
+		    if (RelationIsAoRows(oldRelation))
+		    {
+		      AppendOnlyInsertDescData *oldInsertDesc = oldResultRelInfo->ri_aoInsertDesc;
+		      Assert(NULL != oldInsertDesc);
+
+		      elog(INFO, "AO: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
+			   estate->es_last_inserted_part,
+			   oldResultRelInfo->ri_RelationDesc->rd_rel->relname.data,
+			   new_part_oid,
+			   resultRelInfo->ri_RelationDesc->rd_rel->relname.data);
+
+		      oldInsertDesc->sendback = sendback;
+		      
+		      appendonly_insert_finish(oldInsertDesc);
+
+		    } 
+		    else if (RelationIsParquet(oldRelation))
+		    {
+		      ParquetInsertDescData *oldInsertDesc = oldResultRelInfo->ri_parquetInsertDesc;
+		      Assert(NULL != oldInsertDesc);
+
+		      elog(INFO, "PARQ: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
+			   estate->es_last_inserted_part,
+			   oldResultRelInfo->ri_RelationDesc->rd_rel->relname.data,
+			   new_part_oid,
+			   resultRelInfo->ri_RelationDesc->rd_rel->relname.data);
+		      
+		      oldInsertDesc->sendback = sendback;
+
+		      parquet_insert_finish(oldInsertDesc);
+	
+		    }
+		    else 
+		    {
+		      Assert(false && "Unreachable"); 
+		    }
 
 		    /* Store the sendback information in the resultRelInfo for this part */
 		    oldResultRelInfo->ri_insertSendBack = sendback;
@@ -251,58 +279,6 @@ ExecInsert(TupleTableSlot *slot,
 		
 		}
 
-		if (gp_parquet_insert_sort &&
-				PLANGEN_OPTIMIZER == planGen &&
-				InvalidOid != estate->es_last_parq_part &&
-				new_part_oid != estate->es_last_parq_part)
-		{
-
-			Assert(NULL != estate->es_partition_state->result_partition_hash);
-
-			ResultPartHashEntry *entry = hash_search(estate->es_partition_state->result_partition_hash,
-									&estate->es_last_parq_part,
-									HASH_FIND,
-									NULL /* found */);
-
-			Assert(NULL != entry);
-			Assert(entry->offset < estate->es_num_result_relations);
-
-			ResultRelInfo *oldResultRelInfo = & estate->es_result_relations[entry->offset];
-
-			elog(INFO, "PARQ: Switching from old part oid=%d name=[%s] to new part oid=%d name=[%s]",
-					estate->es_last_parq_part,
-					oldResultRelInfo->ri_RelationDesc->rd_rel->relname.data,
-					new_part_oid,
-					resultRelInfo->ri_RelationDesc->rd_rel->relname.data);
-
-			/*
-			 * We are opening a new partition, and the last partition we
-			 * inserted into was a Parquet part. Let's close the old
-			 * parquet insert descriptor to free the memory before
-			 * opening the new one.
-			 */
-			ParquetInsertDescData *oldInsertDesc = oldResultRelInfo->ri_parquetInsertDesc;
-
-			/*
-			 * We need to preserve the "sendback" information that needs to be
-			 * sent back to the QD process from this part.
-			 * Compute it here, and store it for later use.
-			 */
-			QueryContextDispatchingSendBack sendback =
-					CreateQueryContextDispatchingSendBack(1);
-			sendback->relid = RelationGetRelid(oldResultRelInfo->ri_RelationDesc);
-			oldInsertDesc->sendback = sendback;
-			parquet_insert_finish(oldInsertDesc);
-
-			/* Store the sendback information in the resultRelInfo for this part */
-			oldResultRelInfo->ri_insertSendBack = sendback;
-
-			/* Record in the resultRelInfo that we closed the parquet insert descriptor */
-			oldResultRelInfo->ri_parquetInsertDesc = NULL;
-
-			/* Reset the last parquet part Oid, it's now closed */
-			estate->es_last_parq_part = InvalidOid;
-		}
 	}
 	else
 	{
