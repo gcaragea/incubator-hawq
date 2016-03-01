@@ -502,7 +502,6 @@ typedef struct EState
 	ResultRelInfo *es_result_relation_info;                /* currently active array elt */
 	JunkFilter *es_junkFilter;        /* currently active junk filter */
 
-	Oid es_last_parq_part; /* The Oid of the last parquet partition we opened for insertion */
 	Oid es_last_inserted_part; /* The Oid of the last partition we opened for insertion */
 
 	/* partitioning info for target relation */
