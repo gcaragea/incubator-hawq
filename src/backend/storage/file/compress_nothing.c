@@ -42,6 +42,8 @@ bfz_nothing_close_ex(bfz_t * thiz)
 {
 	gp_retry_close(thiz->fd);
 	thiz->fd = -1;
+	/* Memset the entry to allow detection of double-free from core dump */
+	memset(thiz->freeable_stuff, 0x7f, sizeof(*(thiz->freeable_stuff)));
 	free(thiz->freeable_stuff);
 	thiz->freeable_stuff = NULL;
 }
